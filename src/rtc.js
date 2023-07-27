@@ -65,12 +65,11 @@ function candidateToCandidateStr(candidate, theirCreds) {
 }
 
 export class RTC {
-	constructor(serverId, attemptId, onCandidate, iceServers = []) {
+	constructor(serverOffer, attemptId, onCandidate, iceServers = []) {
 		this.onCandidate = onCandidate;
 		this.attemptId = attemptId;
-		this.serverId = serverId;
-		this.synced = false;
-		this.started = false;
+		this.serverOffer = serverOffer;
+		this.started = null;
 		this.sdp = null;
 		this.rtc = null;
 		this.channels = {};
@@ -79,7 +78,8 @@ export class RTC {
 		this.rtc = new RTCPeerConnection({
 			// edit: rename from urls to iceServers
 			iceServers: [
-				{urls: 'stun:stun.parsec.gg:3478'},
+				{urls: 'stun:stun.l.google.com:19302'},
+				{urls: 'stun:stunserver.org:3478'},
 				// edit: pass additional iceServers from Client for TURN support
 				...iceServers,
 			],
@@ -91,21 +91,12 @@ export class RTC {
 				const carray = event.candidate.candidate.replace('candidate:', '').split(' ');
 
 				if (carray[2].toLowerCase() === 'udp') {
-					this.onCandidate({
-						action: 'candidate_exchange',
-						subject: 'server',
-						to: this.serverId,
-						attempt_id: this.attemptId,
-						candidate_ip: carray[4],
-						candidate_port: parseInt(carray[5]),
-						sync: 0,
-						from_stun: carray[7] === 'srflx' ? 1 : 0,
-						lan: carray[7] === 'host' ? 1 : 0,
-					});
+					this.onCandidate(JSON.stringify(event.candidate));
+				} else {
+					console.warn('ignoring non-udp candidate', event.candidate.candidate);
 				}
 			}
 		};
-
 	}
 
 	close() {
@@ -122,62 +113,40 @@ export class RTC {
 		this.channels[id].onmessage = onMessage;
 	}
 
-	async createOffer() {
-		this.offer = await this.rtc.createOffer();
-		this.sdp = sdpToObj(this.offer);
+	setChannel(id, channel) {
+		this.channels[id] = channel;
+		this.channels[id].binaryType = 'arraybuffer';
+	}
 
-		//this matches the creds structure from the signal service
-		return {
-			ice_ufrag: this.sdp.a['ice-ufrag'],
-			ice_pwd: this.sdp.a['ice-pwd'],
-			fingerprint: this.sdp.a.fingerprint,
-		};
+	async createAnswer() {
+		await this.rtc.setRemoteDescription(this.serverOffer);
+		this.offer = await this.rtc.createAnswer();
+		this.sdp = sdpToObj(this.offer);
+		return this.offer;
 	}
 
 	send(buf, id) {
 		this.channels[id].send(buf);
 	}
 
-	async setCandidate(candidate, theirCreds) {
-		console.log('setCandidate', candidate, theirCreds);
-		if (!this.started) {
-			//this will begin STUN
-			await this.rtc.setLocalDescription(this.offer);
-
-			const sdpStr = credsToSDPStr(theirCreds, this.sdp.a.mid);
-			try {
-				await this.rtc.setRemoteDescription({type: 'answer', sdp: sdpStr});
-			} catch (err) {
-				console.error(err);
-			}
-
-			this.started = true;
-		}
-
-		if (!candidate.sync) {
-			await this.rtc.addIceCandidate({
-				candidate: candidateToCandidateStr(candidate, theirCreds),
-				sdpMid: this.sdp.a.mid,
-				sdpMLineIndex: 0,
+	async setRemoteCandidate(candidate, theirCreds) {
+		console.log('setRemoteCandidate', candidate, theirCreds);
+		if (this.started === null) {
+			this.started = new Promise(async (resolve, reject) => {
+				try {
+					//this will begin STUN
+					await this.rtc.setLocalDescription(this.offer);
+					console.log("setLocalDescription", this.offer);
+					resolve();
+				} catch (e) {
+					console.error('setLocalDescription failed', e);
+					reject(e);
+				}
 			});
-
-			if (candidate.from_stun && !this.synced) {
-				setTimeout(() => {
-					this.onCandidate({
-						action: 'candidate_exchange',
-						subject: 'server',
-						to: this.serverId,
-						attempt_id: this.attemptId,
-						candidate_ip: '1.2.3.4',
-						candidate_port: 1234,
-						sync: 1,
-						from_stun: 0,
-						lan: 0,
-					});
-				}, 100);
-
-				this.synced = true;
-			}
 		}
+		await this.started;
+
+		const remoteCandidate = JSON.parse(candidate);
+		await this.rtc.addIceCandidate(remoteCandidate);
 	}
 }

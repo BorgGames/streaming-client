@@ -18,7 +18,7 @@ function cfgDefaults(cfg) {
 	cfg.network_video_container = 2;
 
 	if (!cfg.app_ss_endpoint)
-		cfg.app_ss_endpoint = 'signal-load.parsec.tv';
+		cfg.app_ss_endpoint = 'borg.games';
 
 	if (!cfg.app_ss_port)
 		cfg.app_ss_port = 443;
@@ -46,8 +46,12 @@ export class Client {
 		this.audioPlayer = new AudioPlayer();
 		this.connected = false;
 		this.rtc = null;
+		this.pingInterval = null;
 		this.listeners = [];
+		this.pingMax = null;
+		this.pingLast = null;
 		this.iceServers = iceServers;
+		this.element = element;
 
 		this.videoPlayer = new VideoPlayer(element, () => {
 			this.rtc.send(Msg.reinit(), 0);
@@ -81,6 +85,7 @@ export class Client {
 				break;
 
 			case Enum.Msg.Abort:
+				console.log('Server Abort', msg.data0);
 				this.destroy(msg.data0);
 				break;
 
@@ -98,14 +103,23 @@ export class Client {
 		}
 	}
 
-	async connect(sessionId, serverId, cfg) {
+	async connect(sessionId, serverOffer, cfg) {
 		cfg = cfgDefaults(cfg);
 
 		const onRTCCandidate = (candidate) => {
-			this.signal.send(sessionId, candidate);
+			this.signal.sendCandidate(candidate);
 		};
 
-		const onControlOpen = () => {
+		const onControlOpen = async () => {
+			const channel = this.rtc.channels[0];
+			const networkStatistics = await Util.getNetworkStatistics(channel);
+
+			// TODO decide if we want to continue
+
+			channel.onmessage = (event) => {
+				this._dispatchEvent(event.data);
+			};
+
 			this.connected = true;
 
 			this.listeners.push(Util.addListener(document, 'visibilitychange', () => {
@@ -121,29 +135,96 @@ export class Client {
 			this.rtc.send(Msg.config(cfg), 0);
 			this.rtc.send(Msg.init(), 0);
 
+			this.pingInterval = setInterval(() => { this._ping(); }, 1000);
+
 			this.input.attach();
 			this.onEvent({type: 'connect'});
 		};
 
-		this.rtc = new RTC(serverId, this.signal.getAttemptId(), onRTCCandidate, this.iceServers);
+		this.rtc = new RTC(serverOffer, this.signal.getAttemptId(), onRTCCandidate, this.iceServers);
 
-		this.rtc.addChannel('control', 0, onControlOpen, (event) => {
-			this._dispatchEvent(event.data);
+		this.rtc.rtc.addEventListener('datachannel', (event) => {
+			const channel = event.channel;
+			console.log("datachannel", channel.label, channel.id, channel.readyState);
+			switch (channel.label) {
+			case 'control':
+				this.rtc.setChannel(0, channel);
+				onControlOpen();
+				break;
+			default:
+				console.error('Unknown datachannel', channel.label);
+				break;
+			}
 		});
 
-		this.rtc.addChannel('video', 1, null, (event) => {
-			this.videoPlayer.push(event.data);
-		});
+		this.rtc.rtc.ontrack = (event) => {
+			this.element.addEventListener('error', (e) => {
+				console.error('video error', e);
+			});
+			this.element.srcObject = event.streams[0];
+			console.log("ontrack", event.streams[0]);
+			// TODO this.element.play(); needs user interaction
+		};
 
-		this.rtc.addChannel('audio', 2, null, (event) => {
-			this.audioPlayer.queueData(event.data);
-		});
+		// this.rtc.addChannel('audio', 2, null, (event) => {
+		// 	this.audioPlayer.queueData(event.data);
+		// });
 
-		const myCreds = await this.rtc.createOffer();
+		const myAnswer = await this.rtc.createAnswer();
 
-		this.signal.connect(cfg.app_ss_endpoint, cfg.app_ss_port, sessionId, serverId, myCreds, (candidate, theirCreds) => {
-			this.rtc.setCandidate(candidate, theirCreds);
+		this.signal.connect(cfg.app_ss_endpoint, cfg.app_ss_port, sessionId, myAnswer, (candidate, theirCreds) => {
+			this.rtc.setRemoteCandidate(candidate, theirCreds);
 		});
+	}
+
+	async _ping() {
+		const channel = this.rtc.channels[0];
+		const tag = Math.floor(Math.random() * 0x60000000);
+		const start = performance.now();
+		var completed = false;
+		const roundtrip = new Promise((resolve, reject) => {
+			function responseListener(event) {
+				const end = performance.now();
+				if (end - start > 30000) {
+					channel.removeEventListener('message', responseListener);
+					console.error(`ping timeout ${tag}`);
+					reject("timeout");
+					return;
+				}
+
+				const msg = Msg.unpack(event.data);
+				if (msg.type !== Enum.Msg.Ping || msg.data0 !== tag) {
+					return;
+				}
+				channel.removeEventListener('message', responseListener);
+				resolve(end);
+			};
+			channel.addEventListener('message', responseListener);
+			setTimeout(() => {
+				channel.removeEventListener('message', responseListener);
+				if (!completed) {
+					console.error(`ping timeout ${tag}`);
+					reject("timeout");
+				}
+			}, 30000);
+		});
+		this.rtc.send(Msg.ping(tag), 0);
+		console.debug(`ping ${tag}`);
+		// wait for echo
+		var end;
+		try{
+			end = await roundtrip;
+		} catch (e) {
+			if (e === "timeout")
+				return;
+			throw e;
+		}
+		completed = true;
+		const roundtrip_ms = end - start;
+		this.pingLast = roundtrip_ms;
+		if (this.pingMax === null || roundtrip_ms > this.pingMax)
+			this.pingMax = roundtrip_ms;
+		console.debug(`ping ${tag}: ${roundtrip_ms}ms   max: ${this.pingMax}ms`);
 	}
 
 	destroy(code) {
@@ -153,6 +234,11 @@ export class Client {
 		this.videoPlayer.destroy();
 		this.audioPlayer.destroy();
 		this.input.detach();
+
+		if (this.pingInterval !== null) {
+			clearInterval(this.pingInterval);
+			this.pingInterval = null;
+		}
 
 		if (this.connected) {
 			clearInterval(this.logInterval);

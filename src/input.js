@@ -126,7 +126,7 @@ export class Input {
 
 		// edit: make macOS touchpad scrollable by changing 100 to 2, as int32 is used in msg
 		// FIXME: what's the delta when using mouse on macOS or other platforms?
-		this.send(Msg.mouseWheel(-1 * event.deltaX / 2, -1 * event.deltaY / 2));
+		this.send(Msg.mouseWheel(event.deltaX, event.deltaY, event.deltaZ));
 	}
 
 	_contextMenu(event) {

@@ -52,8 +52,8 @@ export function kb(code, mod, down) {
 	return control(Enum.Msg.Kb, code, mod, down);
 }
 
-export function mouseWheel(deltaX, deltaY) {
-	return control(Enum.Msg.MouseWheel, deltaX, deltaY, 0);
+export function mouseWheel(deltaX, deltaY, deltaZ) {
+	return control(Enum.Msg.MouseWheel, deltaX, deltaY, deltaZ);
 }
 
 export function button(btn, pressed, index) {
@@ -82,6 +82,10 @@ export function reinit() {
 
 export function abort(reason) {
 	return control(Enum.Msg.Abort, reason, 0, 0);
+}
+
+export function ping(tag) {
+	return control(Enum.Msg.Ping, tag, 0, 0);
 }
 
 function serializeConfig(cfg) {

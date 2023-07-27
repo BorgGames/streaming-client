@@ -20,6 +20,7 @@ export const Msg = {
 	Chat       : 17,
 	Status     : 18,
 	Block      : 19,
+	Ping       : 20,
 };
 
 export const Mapping = {
