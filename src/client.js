@@ -1,5 +1,4 @@
 // Util modules
-import * as API from './api.js';
 import * as Enum from './enum.js';
 import * as Msg from './msg.js';
 import * as Util from './util.js';
@@ -8,7 +7,6 @@ import * as Util from './util.js';
 import {AudioPlayer} from './audio.js';
 import {Input} from './input.js';
 import {RTC} from './rtc.js';
-import {Signal} from './signal.js';
 import {VideoPlayer} from './video.js';
 
 function cfgDefaults(cfg) {
@@ -41,8 +39,10 @@ function cfgDefaults(cfg) {
 
 export class Client {
 	// edit: accept additional iceServers and pass them to RTC
-	constructor(element, onEvent, iceServers = []) {
+	constructor(api, signalFactory, element, onEvent, channelOpen, iceServers = []) {
+		this.api = api;
 		this.onEvent = onEvent;
+		this.channelOpen = channelOpen;
 		this.audioPlayer = new AudioPlayer();
 		this.connected = false;
 		this.rtc = null;
@@ -57,7 +57,7 @@ export class Client {
 			this.rtc.send(Msg.reinit(), 0);
 		});
 
-		this.signal = new Signal((code) => {
+		this.signal = signalFactory((code) => {
 			this.destroy(code === 4001 ? Enum.Warning.PeerGone : code);
 		});
 
@@ -105,6 +105,7 @@ export class Client {
 
 	async connect(sessionId, serverOffer, cfg) {
 		cfg = cfgDefaults(cfg);
+		cfg = this.signal.cfgDefaults(cfg);
 
 		const onRTCCandidate = (candidate) => {
 			this.signal.sendCandidate(candidate);
@@ -112,7 +113,7 @@ export class Client {
 
 		const onControlOpen = async () => {
 			const channel = this.rtc.channels[0];
-			const networkStatistics = await Util.getNetworkStatistics(channel);
+			const networkStatistics = await this.channelOpen('control', channel);
 
 			// TODO decide if we want to continue
 
@@ -172,7 +173,7 @@ export class Client {
 
 		const myAnswer = await this.rtc.createAnswer();
 
-		this.signal.connect(cfg.app_ss_endpoint, cfg.app_ss_port, sessionId, myAnswer, (candidate, theirCreds) => {
+		this.signal.connect(cfg, sessionId, myAnswer, (candidate, theirCreds) => {
 			this.rtc.setRemoteCandidate(candidate, theirCreds);
 		});
 	}
@@ -245,7 +246,7 @@ export class Client {
 			this.rtc.send(Msg.abort(code), 0);
 		}
 
-		API.connectionUpdate({
+		this.api.connectionUpdate({
 			state_str: 'LSC_EXIT',
 			attempt_id: this.signal.getAttemptId(),
 			exit_code: code,
