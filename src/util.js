@@ -9,3 +9,21 @@ export function removeListeners(listeners) {
 	for (const listener of listeners)
 		listener[0].removeEventListener(listener[1], listener[2]);
 }
+
+export function wait(time_ms) {
+	return new Promise(resolve => {
+		setTimeout(resolve, time_ms);
+	});
+}
+
+export function toggleFullscreen(element) {
+	if (document.webkitFullscreenElement) {
+		document.webkitExitFullscreen();
+
+	} else {
+		element.webkitRequestFullscreen();
+
+		if (navigator.keyboard && navigator.keyboard.lock)
+			navigator.keyboard.lock();
+	}
+}
