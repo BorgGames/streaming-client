@@ -35,9 +35,11 @@ export class AudioPlayer {
 
 			// edit: previously import.meta is used to locate the .wasm,
 			// here we use the webpack way to include a specified file in the build
-			locateFile: () => '/wasm/opus.wasm',
+			locateFile: () => AudioPlayer.OPUS_WASM,
 		});
 	}
+
+	static OPUS_WASM = '/wasm/opus.wasm';
 
 	_refreshBuffer() {
 		const buf = this.ctx.createBuffer(2, OUTPUT_SIZE, 48000);
