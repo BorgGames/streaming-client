@@ -119,7 +119,12 @@ export class RTC {
 	}
 
 	async createAnswer() {
-		await this.rtc.setRemoteDescription(this.serverOffer);
+		try{
+			await this.rtc.setRemoteDescription(this.serverOffer);
+		} catch (e) {
+			console.error(this.serverOffer);
+			throw e;
+		}
 		this.offer = await this.rtc.createAnswer();
 		this.sdp = sdpToObj(this.offer);
 		return this.offer;
