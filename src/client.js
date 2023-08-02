@@ -44,7 +44,11 @@ export class Client {
 		this.onEvent = onEvent;
 		this.channelOpen = channelOpen;
 		this.audioPlayer = new AudioPlayer();
-		this.connected = false;
+		this.isConnected = false;
+		this.connected = new Promise((resolve, reject) => {
+			this.connectedResolve = resolve;
+			this.connectedReject = reject;
+		});
 		this.rtc = null;
 		this.pingInterval = null;
 		this.listeners = [];
@@ -62,7 +66,7 @@ export class Client {
 		});
 
 		this.input = new Input(element, (buf) => {
-			if (this.connected)
+			if (this.isConnected)
 				this.rtc.send(buf, 0);
 		});
 
@@ -121,7 +125,8 @@ export class Client {
 				this._dispatchEvent(event.data);
 			};
 
-			this.connected = true;
+			this.isConnected = true;
+			this.connectedResolve(networkStatistics);
 
 			this.listeners.push(Util.addListener(document, 'visibilitychange', () => {
 				if (document.hidden) {
@@ -176,6 +181,8 @@ export class Client {
 		this.signal.connect(cfg, sessionId, myAnswer, (candidate, theirCreds) => {
 			this.rtc.setRemoteCandidate(candidate, theirCreds);
 		});
+
+		return await this.connected;
 	}
 
 	async _ping() {
@@ -241,7 +248,7 @@ export class Client {
 			this.pingInterval = null;
 		}
 
-		if (this.connected) {
+		if (this.isConnected) {
 			clearInterval(this.logInterval);
 			this.rtc.send(Msg.abort(code), 0);
 		}
@@ -252,8 +259,13 @@ export class Client {
 			exit_code: code,
 		});
 
-		this.rtc.close();
-		this.connected = false;
+		if (this.rtc !== null)
+			this.rtc.close();
+		this.isConnected = false;
 		this.onEvent({type: 'exit', code});
 	}
 }
+
+Client.StopCodes = Object.freeze({
+	CONNECTION_TIMEOUT: 4080,
+});
