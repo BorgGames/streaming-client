@@ -135,10 +135,10 @@ export class Client {
 
 			this.listeners.push(Util.addListener(document, 'visibilitychange', () => {
 				if (document.hidden) {
-					this.videoPlayer.destroy();
+					this.element.pause();
 					this.rtc.send(Msg.block(), 0);
-
 				} else {
+					this.element.play();
 					this.rtc.send(Msg.reinit(), 0);
 				}
 			}));
