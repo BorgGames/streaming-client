@@ -117,8 +117,13 @@ export class Client {
 
 		const onControlOpen = async () => {
 			const channel = this.rtc.channels[0];
-			const networkStatistics = await this.channelOpen('control', channel);
-
+			try {
+				var networkStatistics = await this.channelOpen('control', channel);
+			} catch (e) {
+				this.connectedReject(e);
+				return;
+			}
+			
 			// TODO decide if we want to continue
 
 			channel.onmessage = (event) => {
@@ -157,6 +162,9 @@ export class Client {
 				this.rtc.setChannel(0, channel);
 				onControlOpen();
 				break;
+			case 'persistence':
+				console.warn("persistence channel not implemented");
+				break;
 			default:
 				console.error('Unknown datachannel', channel.label);
 				break;
@@ -170,6 +178,10 @@ export class Client {
 			this.element.srcObject = event.streams[0];
 			console.log("ontrack", event.streams[0]);
 			// TODO this.element.play(); needs user interaction
+		};
+		
+		this.rtc.rtc.onremovetrack = (event) => {
+			console.debug("onremovetrack", event);
 		};
 
 		// this.rtc.addChannel('audio', 2, null, (event) => {
@@ -219,9 +231,8 @@ export class Client {
 		this.rtc.send(Msg.ping(tag), 0);
 		console.debug(`ping ${tag}`);
 		// wait for echo
-		var end;
 		try{
-			end = await roundtrip;
+			var end = await roundtrip;
 		} catch (e) {
 			if (e === "timeout")
 				return;
