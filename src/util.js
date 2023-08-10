@@ -27,3 +27,9 @@ export function toggleFullscreen(element) {
 			navigator.keyboard.lock();
 	}
 }
+
+export function timeout(time_ms) {
+	return new Promise((_, reject) => {
+		setTimeout(()=> reject('timeout'), time_ms);
+	});
+}
