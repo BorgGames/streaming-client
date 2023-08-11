@@ -189,6 +189,9 @@ export class Client {
 		// });
 
 		const myAnswer = await this.rtc.createAnswer();
+		
+		if (isVideoInactive(myAnswer.sdp))
+			throw new Error("Browser does not support necessary video codec");
 
 		this.signal.connect(cfg, sessionId, myAnswer, (candidate, theirCreds) => {
 			this.rtc.setRemoteCandidate(candidate, theirCreds);
@@ -276,6 +279,12 @@ export class Client {
 		this.onEvent({type: 'exit', code});
 	}
 }
+
+const videoInactiveRegex = /m=video\s+0\s+/;
+function isVideoInactive(sdp) {
+	return videoInactiveRegex.test(sdp);
+}
+
 
 Client.StopCodes = Object.freeze({
 	CONNECTION_TIMEOUT: 4080,
