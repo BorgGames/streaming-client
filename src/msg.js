@@ -89,12 +89,7 @@ export function ping(tag) {
 }
 
 function serializeConfig(cfg) {
-	const pairs = [];
-
-	for (const item of Object.entries(cfg))
-		pairs.push(`${item[0]}=${item[1]}`);
-
-	return pairs.join(':');
+	return JSON.stringify(cfg, null, 0);
 }
 
 export function config(cfg) {
