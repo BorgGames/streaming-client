@@ -74,6 +74,9 @@ export class Client {
 			this.destroy(0);
 			return null;
 		}));
+		this.listeners.push(Util.addListener(element, 'playing', () => {
+			this._status('');
+		}))
 	}
 
 	_dispatchEvent(buf) {
@@ -116,6 +119,7 @@ export class Client {
 		};
 
 		const onControlOpen = async () => {
+			this._status('connected\n\nwaiting for video...');
 			const channel = this.rtc.channels[0];
 			try {
 				var networkStatistics = await this.channelOpen('control', channel);
@@ -192,6 +196,8 @@ export class Client {
 		
 		if (isVideoInactive(myAnswer.sdp))
 			throw new Error("Browser does not support necessary video codec");
+		
+		this._status('connecting...');
 
 		this.signal.connect(cfg, sessionId, myAnswer, (candidate, theirCreds) => {
 			this.rtc.setRemoteCandidate(candidate, theirCreds);
@@ -247,6 +253,10 @@ export class Client {
 		if (this.pingMax === null || roundtrip_ms > this.pingMax)
 			this.pingMax = roundtrip_ms;
 		console.debug(`ping ${tag}: ${roundtrip_ms}ms   max: ${this.pingMax}ms`);
+	}
+
+	_status(msg) {
+		this.onEvent({type: 'status', msg})
 	}
 
 	destroy(code) {
