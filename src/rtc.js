@@ -122,7 +122,7 @@ export class RTC {
 		try{
 			await this.rtc.setRemoteDescription(this.serverOffer);
 		} catch (e) {
-			console.error(this.serverOffer);
+			console.error(e, this.serverOffer);
 			throw e;
 		}
 		this.offer = await this.rtc.createAnswer();
