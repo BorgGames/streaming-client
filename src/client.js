@@ -167,7 +167,7 @@ export class Client {
 				onControlOpen();
 				break;
 			case 'persistence':
-				console.warn("persistence channel not implemented");
+				this.channelOpen('persistence', channel);
 				break;
 			default:
 				console.error('Unknown datachannel', channel.label);
