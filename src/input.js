@@ -53,12 +53,12 @@ export class Input {
 		// 	return;
 		// }
 
-		let data0 = 0;
+		let relative = 0;
 		let x = 0;
 		let y = 0;
 
 		if (document.pointerLockElement) {
-			data0 = 1;
+			relative = 1;
 			x = event.movementX;
 			y = event.movementY;
 
@@ -68,7 +68,7 @@ export class Input {
 			y = clientToServerY(event.offsetY, this.m);
 		}
 
-		this.send(Msg.motion(data0, x, y));
+		this.send(Msg.motion(relative, x, y));
 	}
 
 	_mouseButton(event) {
@@ -94,6 +94,15 @@ export class Input {
 		}
 
 		this.send(Msg.mouse(button, down ? 1 : 0));
+	}
+	
+	_touch(event) {
+		const down = event.type === 'touchstart';
+		const touch = event.changedTouches[0];
+		const x = clientToServerX(touch.clientX, this.m);
+		const y = clientToServerY(touch.clientY, this.m);
+		this.send(Msg.motion(0, x, y));
+		this.send(Msg.mouse(1, down ? 1 : 0));
 	}
 
 	_key(event) {
@@ -245,6 +254,8 @@ export class Input {
 		this.listeners.push(Util.addListener(this.element, 'mousemove', this._mouseMovement, this));
 		this.listeners.push(Util.addListener(this.element, 'mousedown', this._mouseButton, this));
 		this.listeners.push(Util.addListener(this.element, 'mouseup', this._mouseButton, this));
+		this.listeners.push(Util.addListener(this.element, 'touchstart', this._touch, this));
+		this.listeners.push(Util.addListener(this.element, 'touchend', this._touch, this));
 		// edit: use standard event although there is no difference
 		this.listeners.push(Util.addListener(this.element, 'wheel', this._mouseWheel, this));
 		this.listeners.push(Util.addListener(this.element, 'contextmenu', this._contextMenu, this));
