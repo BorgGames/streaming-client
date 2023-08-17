@@ -72,6 +72,10 @@ export function init() {
 	return control(Enum.Msg.Init, 0, 0, 0);
 }
 
+export function launch() {
+	return control(Enum.Msg.Launch, 0, 0, 0);
+}
+
 export function block() {
 	return control(Enum.Msg.Block, 0, 0, 0);
 }
@@ -100,8 +104,9 @@ export function config(cfg) {
 /*** UNPACKING ***/
 
 function unpackControl(view) {
+	const type = view.getInt8(0); 
 	return {
-		type: view.getInt8(0),
+		type,
 		data0: view.getInt32(1),
 		data1: view.getInt32(5),
 		data2: view.getInt32(9),

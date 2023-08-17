@@ -298,4 +298,5 @@ function isVideoInactive(sdp) {
 
 Client.StopCodes = Object.freeze({
 	CONNECTION_TIMEOUT: 4080,
+	CONCURRENT_SESSION: 4090,
 });

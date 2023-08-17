@@ -1,3 +1,12 @@
+Array.prototype.removeByValue = function(value) {
+	const index = this.indexOf(value);
+	if (index === -1)
+		return false;
+
+	this.splice(index, 1);
+	return true;
+}
+
 export function addListener(obj, name, func, ctx) {
 	const newFunc = ctx ? func.bind(ctx) : func;
 	obj.addEventListener(name, newFunc);

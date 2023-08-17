@@ -21,6 +21,7 @@ export const Msg = {
 	Status     : 18,
 	Block      : 19,
 	Ping       : 20,
+	Launch     : 21,
 };
 
 export const Mapping = {
