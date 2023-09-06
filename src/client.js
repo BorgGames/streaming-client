@@ -119,7 +119,7 @@ export class Client {
 		};
 
 		const onControlOpen = async () => {
-			this._status('connected\n\nwaiting for video...');
+			this._status('connected\n\nwaiting for reply...');
 			const channel = this.rtc.channels[0];
 			try {
 				var networkStatistics = await this.channelOpen('control', channel);
@@ -127,6 +127,8 @@ export class Client {
 				this.connectedReject(e);
 				return;
 			}
+
+			this._status('waiting for video...');
 			
 			// TODO decide if we want to continue
 
