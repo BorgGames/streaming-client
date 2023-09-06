@@ -125,6 +125,9 @@ export class RTC {
 			console.error(e, this.serverOffer);
 			throw e;
 		}
+		if ("configureRTC" in this) {
+			this.configureRTC(this.rtc);
+		}
 		this.offer = await this.rtc.createAnswer();
 		this.sdp = sdpToObj(this.offer);
 		return this.offer;

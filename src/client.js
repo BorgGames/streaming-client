@@ -193,6 +193,11 @@ export class Client {
 		// this.rtc.addChannel('audio', 2, null, (event) => {
 		// 	this.audioPlayer.queueData(event.data);
 		// });
+		
+		if ("configureRTC" in this) {
+			this.configureRTC(this.rtc.rtc);
+			this.rtc.configureRTC = this.configureRTC;
+		}
 
 		const myAnswer = await this.rtc.createAnswer();
 		
