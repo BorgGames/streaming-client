@@ -76,7 +76,16 @@ export class Client {
 		}));
 		this.listeners.push(Util.addListener(element, 'playing', () => {
 			this._status('');
-		}))
+		}));
+		
+		for(const event of ['abort', 'ended', 'stalled', 'suspend', 'waiting']){
+			this.listeners.push(Util.addListener(element, event, () => {
+				this._status('video ' + event);
+			}));
+		}
+		this.listeners.push(Util.addListener(element, 'error', () => {
+			this._status('video error: ' + element.error.message);
+		}));
 	}
 
 	_dispatchEvent(buf) {
