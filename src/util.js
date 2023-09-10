@@ -38,7 +38,11 @@ export function toggleFullscreen(element) {
 }
 
 export function timeout(time_ms) {
-	return new Promise((_, reject) => {
+	let rj = null;
+	let promise = new Promise((_, reject) => {
+		rj = reject;
 		setTimeout(()=> reject('timeout'), time_ms);
 	});
+	promise.reject = rj;
+	return promise;
 }
