@@ -80,10 +80,14 @@ export class Client {
 		
 		for(const event of ['abort', 'ended', 'stalled', 'suspend', 'waiting']){
 			this.listeners.push(Util.addListener(element, event, () => {
+				if (!this.exited())
+					this.rtc.send(Msg.reinit(), 0);
 				this._status('video ' + event);
 			}));
 		}
 		this.listeners.push(Util.addListener(element, 'error', () => {
+			if (!this.exited())
+				this.rtc.send(Msg.reinit(), 0);
 			this._status('video error: ' + element.error.message);
 		}));
 	}
@@ -136,6 +140,9 @@ export class Client {
 				this.connectedReject(e);
 				return;
 			}
+
+			if (this.exited())
+				return;
 
 			this._status('waiting for video...');
 			
@@ -271,11 +278,20 @@ export class Client {
 		console.debug(`ping ${tag}: ${roundtrip_ms}ms   max: ${this.pingMax}ms`);
 	}
 
+	exited() {
+		return this.hasOwnProperty('exitCode');
+	}
 	_status(msg) {
 		this.onEvent({type: 'status', msg})
 	}
 
 	destroy(code) {
+		if (this.exited()) {
+			console.warn(`exit reentry {code} after {this.exitCode}`);
+			return;
+		}
+
+		this.exitCode = code;
 		Util.removeListeners(this.listeners);
 
 		this.signal.close(code >= 3000 && code < 5000 ? code : 1000);
