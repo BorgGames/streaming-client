@@ -80,13 +80,13 @@ export class Client {
 		
 		for(const event of ['abort', 'ended', 'stalled', 'suspend', 'waiting']){
 			this.listeners.push(Util.addListener(element, event, () => {
-				if (!this.exited())
+				if (!this.exited() && this.isConnected)
 					this.rtc.send(Msg.reinit(), 0);
 				this._status('video ' + event);
 			}));
 		}
 		this.listeners.push(Util.addListener(element, 'error', () => {
-			if (!this.exited())
+			if (!this.exited() && this.isConnected)
 				this.rtc.send(Msg.reinit(), 0);
 			this._status('video error: ' + element.error.message);
 		}));
@@ -155,12 +155,15 @@ export class Client {
 			this.isConnected = true;
 			this.connectedResolve(networkStatistics);
 
+			this.paused = false;
 			this.listeners.push(Util.addListener(document, 'visibilitychange', () => {
 				if (document.hidden) {
 					this.element.pause();
+					this.paused = true;
 					this.rtc.send(Msg.block(), 0);
 				} else {
 					this.element.play();
+					this.paused = false;
 					this.rtc.send(Msg.reinit(), 0);
 				}
 			}));
@@ -169,6 +172,11 @@ export class Client {
 			this.rtc.send(Msg.init(), 0);
 
 			this.pingInterval = setInterval(() => { this._ping(); }, 1000);
+			this._setReinitTimeout();
+			this.listeners.push(Util.addListener(this.element, 'timeupdate', () => {
+				clearTimeout(this._reinitTimeout);
+				this._setReinitTimeout();
+			}));
 
 			this.input.attach();
 			this.onEvent({type: 'connect'});
@@ -229,6 +237,15 @@ export class Client {
 		return await this.connected;
 	}
 
+	_setReinitTimeout() {
+		this._reinitTimeout = setTimeout(() => {
+			if (!this.exited() && !this.paused) {
+				console.debug('timeupdate stalled');
+				this.rtc.send(Msg.reinit(), 0);
+				this._setReinitTimeout();
+			}
+		}, 350);
+	}
 	async _ping() {
 		const channel = this.rtc.channels[0];
 		const tag = Math.floor(Math.random() * 0x60000000);
@@ -250,7 +267,7 @@ export class Client {
 				}
 				channel.removeEventListener('message', responseListener);
 				resolve(end);
-			};
+			}
 			channel.addEventListener('message', responseListener);
 			setTimeout(() => {
 				channel.removeEventListener('message', responseListener);
