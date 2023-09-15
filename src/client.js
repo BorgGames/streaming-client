@@ -206,12 +206,11 @@ export class Client {
 		});
 
 		this.rtc.rtc.ontrack = (event) => {
-			this.element.addEventListener('error', (e) => {
-				console.error('video error', e);
-			});
+			console.log("ontrack", event.streams[0]);
+			if (event.track.kind !== 'video')
+				return;
 			this.stream = event.streams[0];
 			this.element.srcObject = this.stream;
-			console.log("ontrack", event.streams[0]);
 			// TODO this.element.play(); needs user interaction
 		};
 		
