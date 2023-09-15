@@ -56,6 +56,7 @@ export class Client {
 		this.pingLast = null;
 		this.iceServers = iceServers;
 		this.element = element;
+		this.stallTimeout = 1000;
 
 		this.videoPlayer = new VideoPlayer(element, () => {
 			this.rtc.send(Msg.reinit(), 0);
@@ -248,7 +249,7 @@ export class Client {
 				this.rtc.send(Msg.reinit(), 0);
 				this._setReinitTimeout();
 			}
-		}, 350);
+		}, this.stallTimeout);
 	}
 	async _ping() {
 		const channel = this.rtc.channels[0];
