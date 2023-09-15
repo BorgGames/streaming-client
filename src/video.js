@@ -49,7 +49,6 @@ export class VideoPlayer {
 
 	destroy() {
 		this.waitingForKeyFrame = true;
-		this.element.pause();
 
 		Util.removeListeners(this.listeners);
 		this.listeners = [];

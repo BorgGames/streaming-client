@@ -178,6 +178,9 @@ export class Client {
 				this._setReinitTimeout();
 			}));
 
+			if (this.hasOwnProperty('stream'))
+				this.element.srcObject = this.stream;
+
 			this.input.attach();
 			this.onEvent({type: 'connect'});
 		};
@@ -205,7 +208,8 @@ export class Client {
 			this.element.addEventListener('error', (e) => {
 				console.error('video error', e);
 			});
-			this.element.srcObject = event.streams[0];
+			this.stream = event.streams[0];
+			this.element.srcObject = this.stream;
 			console.log("ontrack", event.streams[0]);
 			// TODO this.element.play(); needs user interaction
 		};
@@ -312,6 +316,9 @@ export class Client {
 		Util.removeListeners(this.listeners);
 
 		this.signal.close(code >= 3000 && code < 5000 ? code : 1000);
+		if (code !== Client.StopCodes.CONCURRENT_SESSION) {
+			this.element.pause();
+		}
 		this.videoPlayer.destroy();
 		this.audioPlayer.destroy();
 		this.input.detach();
