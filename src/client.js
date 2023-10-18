@@ -179,8 +179,11 @@ export class Client {
 				this._setReinitTimeout();
 			}));
 
-			if (this.hasOwnProperty('stream'))
+			if (this.hasOwnProperty('stream')) {
 				this.element.srcObject = this.stream;
+				// TODO this.element.play(); needs user interaction
+				this.element.play();
+			}
 
 			this.input.attach();
 			this.onEvent({type: 'connect'});
@@ -210,8 +213,6 @@ export class Client {
 			if (event.track.kind !== 'video')
 				return;
 			this.stream = event.streams[0];
-			this.element.srcObject = this.stream;
-			// TODO this.element.play(); needs user interaction
 		};
 		
 		this.rtc.rtc.onremovetrack = (event) => {
@@ -355,4 +356,5 @@ function isVideoInactive(sdp) {
 Client.StopCodes = Object.freeze({
 	CONNECTION_TIMEOUT: 4080,
 	CONCURRENT_SESSION: 4090,
+	GENERAL_ERROR: 4500,
 });
