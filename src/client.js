@@ -304,7 +304,7 @@ export class Client {
 		return this.hasOwnProperty('exitCode');
 	}
 	_status(msg) {
-		this.onEvent({type: 'status', msg})
+		this.onEvent({type: 'status', msg: {str: msg}})
 	}
 
 	destroy(code) {
