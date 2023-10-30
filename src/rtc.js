@@ -65,7 +65,7 @@ function candidateToCandidateStr(candidate, theirCreds) {
 }
 
 export class RTC {
-	constructor(serverOffer, attemptId, onCandidate, iceServers = []) {
+	constructor(serverOffer, attemptId, onCandidate, iceServers = [], certificates = []) {
 		this.onCandidate = onCandidate;
 		this.attemptId = attemptId;
 		this.serverOffer = serverOffer;
@@ -83,6 +83,7 @@ export class RTC {
 				// edit: pass additional iceServers from Client for TURN support
 				...iceServers,
 			],
+			certificates: certificates,
 		});
 
 		this.rtc.onicecandidate = (event) => {
