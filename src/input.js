@@ -61,7 +61,8 @@ export class Input {
 			relative = 1;
 			x = event.movementX;
 			y = event.movementY;
-
+			if (x === 0 && y === 0)
+				return;
 		} else {
 			// edit: use offset coordinates not client coordinates
 			x = clientToServerX(event.offsetX, this.m);
@@ -215,6 +216,7 @@ export class Input {
 	setMouseMode(relative, hidden) {
 		this._setCursorVisibility(!hidden);
 		this.mouseRelative = relative;
+		console.info('mouse mode', relative ? 'relative' : 'absolute', 'visible: ', !hidden);
 
 		if (this.mouseRelative) {
 			this.element.requestPointerLock();
