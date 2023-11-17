@@ -219,7 +219,9 @@ export class Input {
 		console.info('mouse mode', relative ? 'relative' : 'absolute', 'visible: ', !hidden);
 
 		if (this.mouseRelative) {
-			this.element.requestPointerLock();
+			this.element.requestPointerLock({
+				unadjustedMovement: true,
+			});
 
 		} else {
 			this._exitPointerLock();
