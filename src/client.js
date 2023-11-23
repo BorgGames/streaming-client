@@ -55,10 +55,12 @@ export class Client {
 		this.pingMax = null;
 		this.pingLast = null;
 		this.iceServers = iceServers;
+		const video = element.tagName === 'VIDEO' ? element : element.querySelector('video');
+		this.video = video;
 		this.element = element;
 		this.stallTimeout = 1000;
 
-		this.videoPlayer = new VideoPlayer(element, () => {
+		this.videoPlayer = new VideoPlayer(video, () => {
 			this.rtc.send(Msg.reinit(), 0);
 		});
 
@@ -66,7 +68,7 @@ export class Client {
 			this.destroy(code === 4001 ? Enum.Warning.PeerGone : code);
 		});
 
-		this.input = new Input(element, (buf) => {
+		this.input = new Input(video, (buf) => {
 			if (this.isConnected)
 				this.rtc.send(buf, 0);
 		});
@@ -75,21 +77,21 @@ export class Client {
 			this.destroy(0);
 			return null;
 		}));
-		this.listeners.push(Util.addListener(element, 'playing', () => {
+		this.listeners.push(Util.addListener(video, 'playing', () => {
 			this._status('');
 		}));
 		
 		for(const event of ['abort', 'ended', 'stalled', 'suspend', 'waiting']){
-			this.listeners.push(Util.addListener(element, event, () => {
+			this.listeners.push(Util.addListener(video, event, () => {
 				if (!this.exited() && this.isConnected)
 					this.rtc.send(Msg.reinit(), 0);
 				this._status('video ' + event);
 			}));
 		}
-		this.listeners.push(Util.addListener(element, 'error', () => {
+		this.listeners.push(Util.addListener(video, 'error', () => {
 			if (!this.exited() && this.isConnected)
 				this.rtc.send(Msg.reinit(), 0);
-			this._status('video error: ' + element.error.message);
+			this._status('video error: ' + video.error.message);
 		}));
 	}
 
@@ -159,11 +161,11 @@ export class Client {
 			this.paused = false;
 			this.listeners.push(Util.addListener(document, 'visibilitychange', () => {
 				if (document.hidden) {
-					this.element.pause();
+					this.video.pause();
 					this.paused = true;
 					this.rtc.send(Msg.block(), 0);
 				} else {
-					this.element.play();
+					this.video.play();
 					this.paused = false;
 					this.rtc.send(Msg.reinit(), 0);
 				}
@@ -174,15 +176,15 @@ export class Client {
 
 			this.pingInterval = setInterval(() => { this._ping(); }, 1000);
 			this._setReinitTimeout();
-			this.listeners.push(Util.addListener(this.element, 'timeupdate', () => {
+			this.listeners.push(Util.addListener(this.video, 'timeupdate', () => {
 				clearTimeout(this._reinitTimeout);
 				this._setReinitTimeout();
 			}));
 
 			if (this.hasOwnProperty('stream')) {
-				this.element.srcObject = this.stream;
+				this.video.srcObject = this.stream;
 				// TODO this.element.play(); needs user interaction
-				this.element.play();
+				this.video.play();
 			}
 
 			this.input.attach();
@@ -318,7 +320,7 @@ export class Client {
 
 		this.signal.close(code >= 3000 && code < 5000 ? code : 1000);
 		if (code !== Client.StopCodes.CONCURRENT_SESSION) {
-			this.element.pause();
+			this.video.pause();
 		}
 		this.videoPlayer.destroy();
 		this.audioPlayer.destroy();
