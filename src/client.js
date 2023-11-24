@@ -37,6 +37,13 @@ function cfgDefaults(cfg) {
 	return cfg;
 }
 
+const cert = await RTCPeerConnection.generateCertificate({
+	name: 'RSASSA-PKCS1-v1_5',
+	hash: 'SHA-256',
+	modulusLength: 2048,
+	publicExponent: new Uint8Array([1, 0, 1])
+});
+
 export class Client {
 	// edit: accept additional iceServers and pass them to RTC
 	constructor(api, signalFactory, element, onEvent, channelOpen, iceServers = []) {
@@ -191,7 +198,7 @@ export class Client {
 			this.onEvent({type: 'connect'});
 		};
 
-		this.rtc = new RTC(serverOffer, this.signal.getAttemptId(), onRTCCandidate, this.iceServers);
+		this.rtc = new RTC(serverOffer, this.signal.getAttemptId(), onRTCCandidate, this.iceServers, [cert]);
 
 		this.rtc.rtc.addEventListener('datachannel', (event) => {
 			const channel = event.channel;
