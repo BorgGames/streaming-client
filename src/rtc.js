@@ -87,7 +87,7 @@ export class RTC {
 		});
 
 		this.rtc.onicecandidate = (event) => {
-			if (event.candidate) {
+			if (event.candidate && event.candidate.candidate) {
 				console.info('candidate', event.candidate);
 				const carray = event.candidate.candidate.replace('candidate:', '').split(' ');
 
@@ -96,6 +96,8 @@ export class RTC {
 				} else {
 					console.warn('ignoring non-udp candidate', event.candidate.candidate);
 				}
+			} else {
+				console.info('no more ICE candidates');
 			}
 		};
 	}
