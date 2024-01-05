@@ -6,7 +6,16 @@ import * as Util from './util.js';
 // Class modules
 import {GamepadManager} from './gamepad.js';
 
-function clientToServerX(clientX, m) {
+interface IScreenScaling {
+	mouseMultiX: number;
+	mouseMultiY: number;
+	mouseOffsetX: number;
+	mouseOffsetY: number;
+	frameW: number;
+	frameH: number;
+}
+
+function clientToServerX(clientX: number, m: IScreenScaling) {
 	let serverX = Math.round((clientX - m.mouseOffsetX) * m.mouseMultiX);
 
 	if (serverX === m.frameW - 1) serverX = m.frameW;
@@ -16,7 +25,7 @@ function clientToServerX(clientX, m) {
 	return serverX;
 }
 
-function clientToServerY(clientY, m) {
+function clientToServerY(clientY: number, m: IScreenScaling) {
 	let serverY = Math.round((clientY - m.mouseOffsetY) * m.mouseMultiY);
 
 	if (serverY === m.frameH - 1) serverY = m.frameH;
@@ -26,15 +35,26 @@ function clientToServerY(clientY, m) {
 	return serverY;
 }
 
-function getAxisValue(value) {
+function getAxisValue(value: number) {
 	return value > 0 ? value * 32767 : value * 32768;
 }
 
 export class Input {
-	constructor(element, send) {
+	element: HTMLVideoElement;
+	m!: IScreenScaling;
+	gamepad: null | GamepadManager;
+	mouseRelative: boolean;
+	private blockNextEsc: boolean;
+	send: (data: ArrayBuffer) => void;
+	private listeners: Util.IUtilListener[];
+	cursorClass: string | null;
+	private styles: HTMLStyleElement[];
+	private cache: { [base64: string]: string };
+	private cursorId: number;
+
+	constructor(element: HTMLVideoElement, send: (data: ArrayBuffer) => void) {
 		this.send = send;
 		this.element = element;
-		this.m = null;
 		this.gamepad = null;
 		this.cursorClass = null;
 		this.mouseRelative = false;
@@ -43,9 +63,10 @@ export class Input {
 		this.cache = {};
 		this.styles = [];
 		this.cursorId = 0;
+		this._windowMath();
 	}
 
-	_mouseMovement(event) {
+	_mouseMovement(event: MouseEvent) {
 		if (!this.m) return;
 
 		// edit: let relative mouse only work with locked pointer
@@ -53,12 +74,12 @@ export class Input {
 		// 	return;
 		// }
 
-		let relative = 0;
+		let relative = false;
 		let x = 0;
 		let y = 0;
 
 		if (document.pointerLockElement) {
-			relative = 1;
+			relative = true;
 			x = event.movementX;
 			y = event.movementY;
 			if (x === 0 && y === 0)
@@ -72,17 +93,18 @@ export class Input {
 		this.send(Msg.motion(relative, x, y));
 	}
 
-	_mouseButton(event) {
+	_mouseButton(event: MouseEvent) {
 		const down = event.type === 'mousedown';
 		let button = 0;
 
+		const target = <HTMLElement>event.target;
 		if (!document.pointerLockElement) {
 			if (this.mouseRelative)
-				event.target.requestPointerLock();
+				target.requestPointerLock();
 		}
 
 		if (down && event.button === 0 && event.ctrlKey && event.shiftKey) {
-			event.target.requestPointerLock();
+			target.requestPointerLock();
 			return;
 		}
 
@@ -94,19 +116,19 @@ export class Input {
 			case 4: button = 5; break;
 		}
 
-		this.send(Msg.mouse(button, down ? 1 : 0));
+		this.send(Msg.mouse(button, down));
 	}
 	
-	_touch(event) {
+	_touch(event: TouchEvent) {
 		const down = event.type === 'touchstart';
 		const touch = event.changedTouches[0];
 		const x = clientToServerX(touch.clientX, this.m);
 		const y = clientToServerY(touch.clientY, this.m);
-		this.send(Msg.motion(0, x, y));
-		this.send(Msg.mouse(1, down ? 1 : 0));
+		this.send(Msg.motion(false, x, y));
+		this.send(Msg.mouse(1, down));
 	}
 
-	_key(event) {
+	_key(event: KeyboardEvent) {
 		event.preventDefault();
 
 		//disable problematic browser shortcuts
@@ -127,11 +149,11 @@ export class Input {
 				mod |= 0x00002000;
 			}
 
-			this.send(Msg.kb(code, mod, event.type === 'keydown' ? 1 : 0));
+			this.send(Msg.kb(code, mod, event.type === 'keydown'));
 		}
 	}
 
-	_mouseWheel(event) {
+	_mouseWheel(event: WheelEvent) {
 		event.preventDefault();
 
 		// edit: make macOS touchpad scrollable by changing 100 to 2, as int32 is used in msg
@@ -139,11 +161,11 @@ export class Input {
 		this.send(Msg.mouseWheel(event.deltaX, event.deltaY, event.deltaZ));
 	}
 
-	_contextMenu(event) {
+	_contextMenu(event: Event) {
 		event.preventDefault();
 	}
 
-	_button(index, button, value) {
+	_button(index: number, button: number, value: number) {
 		if (button === 6 || button === 7) { //triggers
 			this.send(Msg.axis(button - 2, getAxisValue(value), index));
 
@@ -155,18 +177,18 @@ export class Input {
 		}
 	}
 
-	_axis(index, axis, value) {
+	_axis(index: number, axis:number, value: number) {
 		this.send(Msg.axis(axis, getAxisValue(value), index));
 	}
 
-	_unplug(index) {
+	_unplug(index: number) {
 		this.send(Msg.unplug(index));
 	}
 
 	_pointerLock() {
 		if (!document.pointerLockElement && !this.blockNextEsc) {
-			this.send(Msg.kb(41, 0, 1));
-			this.send(Msg.kb(41, 0, 0));
+			this.send(Msg.kb(41, 0, true));
+			this.send(Msg.kb(41, 0, false));
 		}
 
 		this.blockNextEsc = false;
@@ -199,12 +221,12 @@ export class Input {
 		};
 	}
 
-	_setCursorVisibility(show) {
+	_setCursorVisibility(show: boolean) {
 		this.element.style.cursor = show ? '' : 'none';
 	}
 
 	_clearCursors() {
-		const head = document.querySelector('head');
+		const head = document.querySelector('head')!;
 
 		for (const style of this.styles)
 			head.removeChild(style);
@@ -213,22 +235,19 @@ export class Input {
 			this.element.classList.remove(this.cursorClass);
 	}
 
-	setMouseMode(relative, hidden) {
+	setMouseMode(relative: boolean, hidden: boolean) {
 		this._setCursorVisibility(!hidden);
 		this.mouseRelative = relative;
 		console.info('mouse mode', relative ? 'relative' : 'absolute', 'visible: ', !hidden);
 
 		if (this.mouseRelative) {
-			this.element.requestPointerLock({
-				unadjustedMovement: true,
-			});
-
+			requestPointerLock(this.element);
 		} else {
 			this._exitPointerLock();
 		}
 	}
 
-	setCursor(data, hotX, hotY) {
+	setCursor(data: string, hotX: number, hotY: number) {
 		if (!this.cache[data]) {
 			this.cache[data] = `cursor-x-${this.cursorId}`;
 
@@ -236,7 +255,7 @@ export class Input {
 			style.type = 'text/css';
 			style.innerHTML = `.cursor-x-${this.cursorId++} ` +
 				`{cursor: url(data:image/png;base64,${data}) ${hotX} ${hotY}, auto;}`;
-			document.querySelector('head').appendChild(style);
+			document.querySelector('head')!.appendChild(style);
 
 			this.styles.push(style);
 		}
@@ -279,4 +298,9 @@ export class Input {
 		if (this.gamepad)
 			this.gamepad.destroy();
 	}
+}
+function requestPointerLock(element: Element) {
+	(element as any).requestPointerLock({
+		unadjustedMovement: true,
+	});
 }

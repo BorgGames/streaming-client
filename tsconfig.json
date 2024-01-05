@@ -1,0 +1,15 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ES2022",
+    "composite": true,
+    "rootDir": "./src",
+    "outDir": "./built",
+    "sourceMap": true,
+    "allowJs": true,
+    "strict": true
+  },
+  "include": [
+    "src/**/*"
+  ]
+}

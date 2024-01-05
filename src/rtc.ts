@@ -1,6 +1,9 @@
-function sdpToObj(sdp) {
-	const sdpArray = sdp.sdp.split('\n');
-	const obj = {};
+function sdpToObj(offer: RTCLocalSessionDescriptionInit) {
+	if (!offer.sdp)
+		throw new Error('no sdp in offer');
+
+	const sdpArray = offer.sdp.split('\n');
+	const obj: Record<string, any> = {};
 
 	for (let x = 0; x < sdpArray.length; x++) {
 		const pair = sdpArray[x].split('=');
@@ -31,47 +34,25 @@ function randomSessionId() {
 	return random.map((n) => n % 10).join('');
 }
 
-function credsToSDPStr(creds, mid) {
-	const remoteDesc =
-		`v=0\r\n` +
-		`o=- ${randomSessionId()} 2 IN IP4 127.0.0.1\r\n` +
-		`s=-\r\n` +
-		`t=0 0\r\n` +
-		`a=group:BUNDLE ${mid}\r\n` +
-		`a=msid-semantic: WMS *\r\n` +
-		`m=application 9 DTLS/SCTP 5000\r\n` +
-		`c=IN IP4 0.0.0.0\r\n` +
-		`b=AS:30\r\n` +
-		`a=ice-ufrag:${creds.ice_ufrag}\r\n` +
-		`a=ice-pwd:${creds.ice_pwd}\r\n` +
-		`a=ice-options:trickle\r\n` +
-		`a=fingerprint:${creds.fingerprint}\r\n` +
-		`a=setup:active\r\n` +
-		`a=mid:${mid}\r\n` +
-		`a=sendrecv\r\n` +
-		`a=sctpmap:5000 webrtc-datachannel 256\r\n` +
-		`a=max-message-size:1073741823\r\n`;
-
-	return remoteDesc;
-}
-
-function candidateToCandidateStr(candidate, theirCreds) {
-	const foundation = 2395300328;
-	const priority = 2113937151;
-	const type = candidate.from_stun ? 'srflx' : 'host';
-
-	return `candidate:${foundation} 1 udp ${priority} ${candidate.candidate_ip} ` +
-		`${candidate.candidate_port} typ ${type} generation 0 ufrag ${theirCreds.ice_ufrag} network-cost 50`;
-}
-
 export class RTC {
-	constructor(serverOffer, attemptId, onCandidate, iceServers = [], certificates = []) {
+	rtc: RTCPeerConnection;
+	private onCandidate: (candidateJSON: string) => void;
+	channels: { [id: number]: RTCDataChannel; };
+	serverOffer: RTCSessionDescriptionInit;
+	offer: RTCLocalSessionDescriptionInit | null;
+	started: null | Promise<void>;
+	configureRTC: ((rtc: RTCPeerConnection) => void) | undefined;
+	attemptId: string;
+	sdp: Record<string, any> | null;
+
+	constructor(serverOffer: RTCSessionDescriptionInit, attemptId: string,
+				onCandidate: (candidateJSON: string) => void,
+				iceServers: RTCIceServer[] = [], certificates: RTCCertificate[] = []) {
 		this.onCandidate = onCandidate;
 		this.attemptId = attemptId;
 		this.serverOffer = serverOffer;
 		this.started = null;
 		this.sdp = null;
-		this.rtc = null;
 		this.channels = {};
 		this.offer = null;
 
@@ -109,14 +90,16 @@ export class RTC {
 		this.rtc.close();
 	}
 
-	addChannel(name, id, onOpen, onMessage) {
+	addChannel(name: string, id: number,
+			   onOpen: (this: RTCDataChannel, ev: Event) => any,
+			   onMessage: (this: RTCDataChannel, ev: MessageEvent<any>) => any) {
 		this.channels[id] = this.rtc.createDataChannel(name, {id});
 		this.channels[id].binaryType = 'arraybuffer';
 		this.channels[id].onopen = onOpen;
 		this.channels[id].onmessage = onMessage;
 	}
 
-	setChannel(id, channel) {
+	setChannel(id: number, channel: RTCDataChannel) {
 		this.channels[id] = channel;
 		this.channels[id].binaryType = 'arraybuffer';
 	}
@@ -128,7 +111,7 @@ export class RTC {
 			console.error(e, this.serverOffer);
 			throw e;
 		}
-		if ("configureRTC" in this) {
+		if (this.configureRTC) {
 			this.configureRTC(this.rtc);
 		}
 		this.offer = await this.rtc.createAnswer();
@@ -136,16 +119,20 @@ export class RTC {
 		return this.offer;
 	}
 
-	send(buf, id) {
+	send(buf: ArrayBuffer, id: number) {
 		this.channels[id].send(buf);
 	}
 
-	async setRemoteCandidate(candidate, theirCreds) {
+	async setRemoteCandidate(candidate: string, theirCreds: any) {
 		console.log('setRemoteCandidate', candidate, theirCreds);
 		if (this.started === null) {
 			this.started = new Promise(async (resolve, reject) => {
 				try {
 					//this will begin STUN
+					if (this.offer === null) {
+						reject(new Error("offer is null"));
+						return;
+					}
 					await this.rtc.setLocalDescription(this.offer);
 					console.log("setLocalDescription", this.offer);
 					resolve();

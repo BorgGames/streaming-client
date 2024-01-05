@@ -6,7 +6,27 @@ import * as Enum from './enum.js';
 
 const CONTROL_SIZE = 13;
 
-function packControl(buf, type, data0, data1, data2) {
+export interface IControlMessage {
+	type: Enum.Msg;
+	data0: number;
+	data1: number;
+	data2: number;
+	str?: string;
+}
+
+export interface ICursorMessage extends IControlMessage {
+	w: number;
+	h: number;
+	x: number;
+	y: number;
+	hotX: number;
+	hotY: number;
+	relative: boolean;
+	hidden: boolean;
+	data: string | null;
+}
+
+function packControl(buf: ArrayBuffer, type: Enum.Msg, data0: number, data1: number, data2: number) {
 	const dest = new DataView(buf);
 	dest.setInt8(0, type);
 	dest.setInt32(1, data0);
@@ -14,7 +34,7 @@ function packControl(buf, type, data0, data1, data2) {
 	dest.setInt32(9, data2);
 }
 
-function packString(buf, offset, str) {
+function packString(buf: ArrayBuffer, offset: number, str: string) {
 	const enc = new TextEncoder();
 	const strBuf = enc.encode(str);
 
@@ -24,14 +44,14 @@ function packString(buf, offset, str) {
 		dest[x] = strBuf[x];
 }
 
-function control(type, data0, data1, data2) {
+function control(type: Enum.Msg, data0: number, data1: number, data2: number) {
 	const buf = new ArrayBuffer(CONTROL_SIZE);
 	packControl(buf, type, data0, data1, data2);
 
 	return buf;
 }
 
-function strMsg(type, str) {
+function strMsg(type: Enum.Msg.Chat | Enum.Msg.Status | Enum.Msg.Config, str: string) {
 	const buf = new ArrayBuffer(CONTROL_SIZE + str.length + 1);
 
 	packControl(buf, type, str.length + 1, 0, 0);
@@ -40,31 +60,31 @@ function strMsg(type, str) {
 	return buf;
 }
 
-export function motion(relative, x, y) {
-	return control(Enum.Msg.Motion, relative, x, y);
+export function motion(relative: boolean, x: number, y: number) {
+	return control(Enum.Msg.Motion, Number(relative), x, y);
 }
 
-export function mouse(btn, down) {
-	return control(Enum.Msg.Mouse, btn, down, 0);
+export function mouse(btn: number, down: boolean) {
+	return control(Enum.Msg.Mouse, btn, Number(down), 0);
 }
 
-export function kb(code, mod, down) {
-	return control(Enum.Msg.Kb, code, mod, down);
+export function kb(code: number, mod: number, down: boolean) {
+	return control(Enum.Msg.Kb, code, mod, Number(down));
 }
 
-export function mouseWheel(deltaX, deltaY, deltaZ) {
+export function mouseWheel(deltaX: number, deltaY: number, deltaZ: number) {
 	return control(Enum.Msg.MouseWheel, deltaX, deltaY, deltaZ);
 }
 
-export function button(btn, pressed, index) {
+export function button(btn: number, pressed: number, index: number) {
 	return control(Enum.Msg.Button, btn, pressed, index);
 }
 
-export function axis(axs, value, index) {
+export function axis(axs: number, value: number, index: number) {
 	return control(Enum.Msg.Axis, axs, value, index);
 }
 
-export function unplug(index) {
+export function unplug(index: number) {
 	return control(Enum.Msg.Unplug, 0, 0, index);
 }
 
@@ -84,26 +104,26 @@ export function reinit() {
 	return control(Enum.Msg.Reinit, 0, 0, 0);
 }
 
-export function abort(reason) {
+export function abort(reason: number) {
 	return control(Enum.Msg.Abort, reason, 0, 0);
 }
 
-export function ping(tag) {
+export function ping(tag: number) {
 	return control(Enum.Msg.Ping, tag, 0, 0);
 }
 
-function serializeConfig(cfg) {
+function serializeConfig(cfg: any) {
 	return JSON.stringify(cfg, null, 0);
 }
 
-export function config(cfg) {
+export function config(cfg: any) {
 	return strMsg(Enum.Msg.Config, serializeConfig(cfg));
 }
 
 
 /*** UNPACKING ***/
 
-function unpackControl(view) {
+function unpackControl(view: DataView): IControlMessage {
 	const type = view.getInt8(0); 
 	return {
 		type,
@@ -113,7 +133,7 @@ function unpackControl(view) {
 	};
 }
 
-function unpackCursor(view) {
+function unpackCursor(view: DataView) {
 	const dataLen = view.getInt32(13);
 	const flags = view.getInt16(29);
 
@@ -131,14 +151,14 @@ function unpackCursor(view) {
 	};
 }
 
-function unpackString(buf, offset, len) {
+function unpackString(buf: ArrayBufferLike, offset: number, len: number) {
 	const dec = new TextDecoder();
 	const strBuf = new Int8Array(buf, offset, len);
 
 	return dec.decode(strBuf);
 }
 
-export function unpack(buf) {
+export function unpack(buf: ArrayBufferLike): IControlMessage {
 	const view = new DataView(buf);
 	const msg = unpackControl(view);
 

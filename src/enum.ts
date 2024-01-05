@@ -1,30 +1,30 @@
-export const Warning = {
-	PeerGone : 99,
-	Declined : 8,
+export enum Warning {
+	PeerGone = 99,
+	Declined = 8,
 };
 
-export const Msg = {
-	Kb         : 0,
-	Mouse      : 1,
-	MouseWheel : 2,
-	Motion     : 3,
-	Button     : 4,
-	Axis       : 5,
-	Unplug     : 6,
-	Config     : 8,
-	Cursor     : 9,
-	Abort      : 10,
-	Init       : 11,
-	Reinit     : 13,
-	Shutter    : 16,
-	Chat       : 17,
-	Status     : 18,
-	Block      : 19,
-	Ping       : 20,
-	Launch     : 21,
+export enum Msg {
+	Kb         = 0,
+	Mouse      = 1,
+	MouseWheel = 2,
+	Motion     = 3,
+	Button     = 4,
+	Axis       = 5,
+	Unplug     = 6,
+	Config     = 8,
+	Cursor     = 9,
+	Abort      = 10,
+	Init       = 11,
+	Reinit     = 13,
+	Shutter    = 16,
+	Chat       = 17,
+	Status     = 18,
+	Block      = 19,
+	Ping       = 20,
+	Launch     = 21,
 };
 
-export const Mapping = {
+export const Mapping: {[btn: number]: number} = {
 	0  : 0,
 	1  : 1,
 	2  : 2,
@@ -41,16 +41,16 @@ export const Mapping = {
 	15 : 14,
 };
 
-export const CursorFlags = {
-	UpdateWarp    : 0x0001,
-	UpdateImage   : 0x0002,
-	UpdateMode    : 0x0004,
-	IsRelative    : 0x0100,
-	IsHidden      : 0x0200,
-	IsTransparent : 0x0400,
+export enum CursorFlags {
+	UpdateWarp    = 0x0001,
+	UpdateImage   = 0x0002,
+	UpdateMode    = 0x0004,
+	IsRelative    = 0x0100,
+	IsHidden      = 0x0200,
+	IsTransparent = 0x0400,
 };
 
-export const Scancodes = {
+export const Scancodes: {[code: string]: number} = {
 	KeyA: 4,
 	KeyB: 5,
 	KeyC: 6,

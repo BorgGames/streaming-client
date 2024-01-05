@@ -4,12 +4,12 @@ import * as Msg from './msg.js';
 import * as Util from './util.js';
 
 // Class modules
-import {AudioPlayer} from './audio.js';
 import {Input} from './input.js';
 import {RTC} from './rtc.js';
 import {VideoPlayer} from './video.js';
+import {ISignal} from './signal.js';
 
-function cfgDefaults(cfg) {
+function cfgDefaults(cfg: any) {
 	if (!cfg) cfg = {};
 
 	//required for MSE
@@ -37,20 +37,71 @@ function cfgDefaults(cfg) {
 	return cfg;
 }
 
+export interface IConnectionAPI {
+	connectionUpdate: (update: any) => void;
+}
+
+export interface IClientEvent {
+	type: string;
+	msg?: Msg.IControlMessage | {str: string};
+}
+
+export interface IShutterEvent extends IClientEvent {
+	enabled: boolean;
+}
+
+export interface IExitEvent extends IClientEvent {
+	code: StopCodes;
+}
+
+enum StopCodes {
+	CONNECTION_TIMEOUT = 4080,
+	CONCURRENT_SESSION = 4090,
+	GENERAL_ERROR = 4500,
+}
+
 const cert = await RTCPeerConnection.generateCertificate({
 	name: 'RSASSA-PKCS1-v1_5',
 	hash: 'SHA-256',
 	modulusLength: 2048,
 	publicExponent: new Uint8Array([1, 0, 1])
-});
+} as RsaHashedKeyGenParams);
 
 export class Client {
-	// edit: accept additional iceServers and pass them to RTC
-	constructor(api, signalFactory, element, onEvent, channelOpen, iceServers = []) {
+	rtc: RTC | null;
+	signal: ISignal;
+	isConnected: boolean;
+	videoPlayer: VideoPlayer;
+	input: Input;
+	connected: Promise<unknown>;
+
+	private connectedResolve!: (value: unknown) => void;
+	private connectedReject!: (reason?: any) => void;
+	private pingInterval: null | number;
+	video: HTMLVideoElement;
+	private listeners: any[];
+	onEvent: (event: IClientEvent) => void;
+	channelOpen: (name: string, channel: RTCDataChannel) => void;
+	paused: boolean;
+	private _reinitTimeout?: number;
+	pingLast: null | number;
+	pingMax: null | number;
+	private api: IConnectionAPI;
+	stallTimeout: number;
+	element: Element;
+	stream?: MediaStream;
+	iceServers: any[];
+	private configureRTC?: (rtc: RTCPeerConnection) => void;
+	exitCode?: number;
+	logInterval?: number;
+
+	constructor(api: IConnectionAPI, signalFactory: (exit: (code: number) => void) => ISignal,
+				element: Element, onEvent: (event: IClientEvent) => void,
+				channelOpen: (name: string, channel: RTCDataChannel) => void,
+				iceServers = []) {
 		this.api = api;
 		this.onEvent = onEvent;
 		this.channelOpen = channelOpen;
-		this.audioPlayer = new AudioPlayer();
 		this.isConnected = false;
 		this.connected = new Promise((resolve, reject) => {
 			this.connectedResolve = resolve;
@@ -62,22 +113,25 @@ export class Client {
 		this.pingMax = null;
 		this.pingLast = null;
 		this.iceServers = iceServers;
-		const video = element.tagName === 'VIDEO' ? element : element.querySelector('video');
+		const video = element.tagName === 'VIDEO'
+			? <HTMLVideoElement>element
+			: <HTMLVideoElement>element.querySelector('video');
 		this.video = video;
 		this.element = element;
+		this.paused = false;
 		this.stallTimeout = 1000;
 
 		this.videoPlayer = new VideoPlayer(video, () => {
-			this.rtc.send(Msg.reinit(), 0);
+			this.rtc!.send(Msg.reinit(), 0);
 		});
 
-		this.signal = signalFactory((code) => {
+		this.signal = signalFactory((code: number) => {
 			this.destroy(code === 4001 ? Enum.Warning.PeerGone : code);
 		});
 
 		this.input = new Input(video, (buf) => {
 			if (this.isConnected)
-				this.rtc.send(buf, 0);
+				this.rtc!.send(buf, 0);
 		});
 
 		this.listeners.push(Util.addListener(window, 'beforeunload', () => {
@@ -91,26 +145,27 @@ export class Client {
 		for(const event of ['abort', 'ended', 'stalled', 'suspend', 'waiting']){
 			this.listeners.push(Util.addListener(video, event, () => {
 				if (!this.exited() && this.isConnected)
-					this.rtc.send(Msg.reinit(), 0);
+					this.rtc!.send(Msg.reinit(), 0);
 				this._status('video ' + event);
 			}));
 		}
 		this.listeners.push(Util.addListener(video, 'error', () => {
 			if (!this.exited() && this.isConnected)
-				this.rtc.send(Msg.reinit(), 0);
-			this._status('video error: ' + video.error.message);
+				this.rtc!.send(Msg.reinit(), 0);
+			this._status('video error: ' + video.error!.message);
 		}));
 	}
 
-	_dispatchEvent(buf) {
+	_dispatchEvent(buf: ArrayBufferLike) {
 		const msg = Msg.unpack(buf);
 
 		switch (msg.type) {
 			case Enum.Msg.Cursor:
-				this.input.setMouseMode(msg.relative, msg.hidden);
+				const cursorMsg = <Msg.ICursorMessage>msg;
+				this.input.setMouseMode(cursorMsg.relative, cursorMsg.hidden);
 
-				if (msg.data)
-					this.input.setCursor(msg.data, msg.hotX, msg.hotY);
+				if (cursorMsg.data)
+					this.input.setCursor(cursorMsg.data, cursorMsg.hotX, cursorMsg.hotY);
 
 				break;
 
@@ -120,7 +175,7 @@ export class Client {
 				break;
 
 			case Enum.Msg.Shutter:
-				this.onEvent({type: 'shutter', enabled: !!msg.data0});
+				this.onEvent({type: 'shutter', enabled: !!msg.data0} as IShutterEvent);
 				break;
 
 			case Enum.Msg.Status:
@@ -133,17 +188,17 @@ export class Client {
 		}
 	}
 
-	async connect(sessionId, serverOffer, cfg) {
+	async connect(sessionId: string, serverOffer: RTCSessionDescriptionInit, cfg: any) {
 		cfg = cfgDefaults(cfg);
 		cfg = this.signal.cfgDefaults(cfg);
 
-		const onRTCCandidate = (candidate) => {
-			this.signal.sendCandidate(candidate);
+		const onRTCCandidate = (candidateJSON: string) => {
+			this.signal.sendCandidate(candidateJSON);
 		};
 
 		const onControlOpen = async () => {
 			this._status('connected\n\nwaiting for reply...');
-			const channel = this.rtc.channels[0];
+			const channel = this.rtc!.channels[0];
 			try {
 				var networkStatistics = await this.channelOpen('control', channel);
 			} catch (e) {
@@ -170,16 +225,16 @@ export class Client {
 				if (document.hidden) {
 					this.video.pause();
 					this.paused = true;
-					this.rtc.send(Msg.block(), 0);
+					this.rtc!.send(Msg.block(), 0);
 				} else {
 					this.video.play();
 					this.paused = false;
-					this.rtc.send(Msg.reinit(), 0);
+					this.rtc!.send(Msg.reinit(), 0);
 				}
 			}));
 
-			this.rtc.send(Msg.config(cfg), 0);
-			this.rtc.send(Msg.init(), 0);
+			this.rtc!.send(Msg.config(cfg), 0);
+			this.rtc!.send(Msg.init(), 0);
 
 			this.pingInterval = setInterval(() => { this._ping(); }, 1000);
 			this._setReinitTimeout();
@@ -188,7 +243,7 @@ export class Client {
 				this._setReinitTimeout();
 			}));
 
-			if (this.hasOwnProperty('stream')) {
+			if (this.stream) {
 				this.video.srcObject = this.stream;
 				// TODO this.element.play(); needs user interaction
 				this.video.play();
@@ -205,7 +260,7 @@ export class Client {
 			console.log("datachannel", channel.label, channel.id, channel.readyState);
 			switch (channel.label) {
 			case 'control':
-				this.rtc.setChannel(0, channel);
+				this.rtc!.setChannel(0, channel);
 				onControlOpen();
 				break;
 			case 'persistence':
@@ -222,30 +277,25 @@ export class Client {
 			if (event.track.kind !== 'video')
 				return;
 			this.stream = event.streams[0];
-		};
-		
-		this.rtc.rtc.onremovetrack = (event) => {
-			console.debug("onremovetrack", event);
+			this.stream.addEventListener('removetrack', (event) => {
+				console.debug("removetrack", event);
+			});
 		};
 
-		// this.rtc.addChannel('audio', 2, null, (event) => {
-		// 	this.audioPlayer.queueData(event.data);
-		// });
-		
-		if ("configureRTC" in this) {
+		if (this.configureRTC) {
 			this.configureRTC(this.rtc.rtc);
 			this.rtc.configureRTC = this.configureRTC;
 		}
 
 		const myAnswer = await this.rtc.createAnswer();
 		
-		if (isVideoInactive(myAnswer.sdp))
+		if (isVideoInactive(myAnswer.sdp!))
 			throw new Error("Browser does not support necessary video codec");
 		
 		this._status('connecting...');
 
-		this.signal.connect(cfg, sessionId, myAnswer, (candidate, theirCreds) => {
-			this.rtc.setRemoteCandidate(candidate, theirCreds);
+		this.signal.connect(cfg, sessionId, myAnswer, (candidate: string, theirCreds: any) => {
+			this.rtc!.setRemoteCandidate(candidate, theirCreds);
 		});
 
 		return await this.connected;
@@ -255,18 +305,18 @@ export class Client {
 		this._reinitTimeout = setTimeout(() => {
 			if (!this.exited() && !this.paused) {
 				console.debug('timeupdate stalled');
-				this.rtc.send(Msg.reinit(), 0);
+				this.rtc!.send(Msg.reinit(), 0);
 				this._setReinitTimeout();
 			}
 		}, this.stallTimeout);
 	}
 	async _ping() {
-		const channel = this.rtc.channels[0];
+		const channel = this.rtc!.channels[0];
 		const tag = Math.floor(Math.random() * 0x60000000);
 		const start = performance.now();
 		var completed = false;
-		const roundtrip = new Promise((resolve, reject) => {
-			function responseListener(event) {
+		const roundtrip = new Promise<number>((resolve, reject) => {
+			function responseListener(event: MessageEvent<ArrayBuffer>) {
 				const end = performance.now();
 				if (end - start > 30000) {
 					channel.removeEventListener('message', responseListener);
@@ -291,7 +341,7 @@ export class Client {
 				}
 			}, 30000);
 		});
-		this.rtc.send(Msg.ping(tag), 0);
+		this.rtc!.send(Msg.ping(tag), 0);
 		console.debug(`ping ${tag}`);
 		// wait for echo
 		try{
@@ -312,11 +362,11 @@ export class Client {
 	exited() {
 		return this.hasOwnProperty('exitCode');
 	}
-	_status(msg) {
+	_status(msg: string) {
 		this.onEvent({type: 'status', msg: {str: msg}})
 	}
 
-	destroy(code) {
+	destroy(code: number) {
 		if (this.exited()) {
 			console.warn(`exit reentry {code} after {this.exitCode}`);
 			return;
@@ -330,7 +380,6 @@ export class Client {
 			this.video.pause();
 		}
 		this.videoPlayer.destroy();
-		this.audioPlayer.destroy();
 		this.input.detach();
 
 		if (this.pingInterval !== null) {
@@ -340,7 +389,7 @@ export class Client {
 
 		if (this.isConnected) {
 			clearInterval(this.logInterval);
-			this.rtc.send(Msg.abort(code), 0);
+			this.rtc!.send(Msg.abort(code), 0);
 		}
 
 		this.api.connectionUpdate({
@@ -352,18 +401,14 @@ export class Client {
 		if (this.rtc !== null)
 			this.rtc.close();
 		this.isConnected = false;
-		this.onEvent({type: 'exit', code});
+		this.onEvent({type: 'exit', code} as IExitEvent);
 	}
+
+	static StopCodes = StopCodes;
 }
 
 const videoInactiveRegex = /m=video\s+0\s+/;
-function isVideoInactive(sdp) {
+function isVideoInactive(sdp: string) {
 	return videoInactiveRegex.test(sdp);
 }
 
-
-Client.StopCodes = Object.freeze({
-	CONNECTION_TIMEOUT: 4080,
-	CONCURRENT_SESSION: 4090,
-	GENERAL_ERROR: 4500,
-});
