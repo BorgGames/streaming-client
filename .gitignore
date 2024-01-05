@@ -6,3 +6,4 @@ wasm/*/*.js
 wasm/*/*.o
 wasm/*/*.wasm
 /built/
+*.tsbuildinfo
