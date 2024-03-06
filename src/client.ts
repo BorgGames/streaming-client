@@ -239,6 +239,7 @@ export class Client {
 			this.pingInterval = setInterval(() => { this._ping(); }, 1000);
 			this._setReinitTimeout();
 			this.listeners.push(Util.addListener(this.video, 'timeupdate', () => {
+				this.onEvent({type: 'frame'});
 				clearTimeout(this._reinitTimeout);
 				this._setReinitTimeout();
 			}));
@@ -304,6 +305,7 @@ export class Client {
 	_setReinitTimeout() {
 		this._reinitTimeout = setTimeout(() => {
 			if (!this.exited() && !this.paused) {
+				this.onEvent({type: 'stall'});
 				console.debug('timeupdate stalled');
 				this.rtc!.send(Msg.reinit(), 0);
 				this._setReinitTimeout();
