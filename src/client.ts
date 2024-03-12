@@ -231,6 +231,7 @@ export class Client {
 					this.paused = false;
 					this.rtc!.send(Msg.reinit(), 0);
 				}
+				this.onEvent({type: 'pause', msg: {str: this.paused.toString()}});
 			}));
 
 			this.rtc!.send(Msg.config(cfg), 0);
