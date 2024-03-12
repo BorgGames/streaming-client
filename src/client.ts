@@ -305,6 +305,12 @@ export class Client {
 		return await this.connected;
 	}
 
+	setConfig(config: any) {
+		if (!this.isConnected)
+			return;
+		this.rtc!.send(Msg.config(config), 0);
+	}
+
 	_setReinitTimeout() {
 		this._reinitTimeout = setTimeout(() => {
 			if (!this.exited() && !this.paused) {
