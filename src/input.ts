@@ -46,6 +46,7 @@ export class Input {
 	mouseRelative: boolean;
 	private blockNextEsc: boolean;
 	send: (data: ArrayBuffer) => void;
+	keyFilter: (event: KeyboardEvent) => boolean = () => true;
 	private listeners: Util.IUtilListener[];
 	cursorClass: string | null;
 	private styles: HTMLStyleElement[];
@@ -129,6 +130,9 @@ export class Input {
 	}
 
 	_key(event: KeyboardEvent) {
+		if (!this.keyFilter(event))
+			return;
+
 		event.preventDefault();
 
 		//disable problematic browser shortcuts
