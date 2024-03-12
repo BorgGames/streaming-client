@@ -43,7 +43,7 @@ export interface IConnectionAPI {
 
 export interface IClientEvent {
 	type: string;
-	msg?: Msg.IControlMessage | {str: string};
+	msg?: Msg.IControlMessage | { str: string };
 }
 
 export interface IShutterEvent extends IClientEvent {
@@ -141,8 +141,8 @@ export class Client {
 		this.listeners.push(Util.addListener(video, 'playing', () => {
 			this._status('');
 		}));
-		
-		for(const event of ['abort', 'ended', 'stalled', 'suspend', 'waiting']){
+
+		for (const event of ['abort', 'ended', 'stalled', 'suspend', 'waiting']) {
 			this.listeners.push(Util.addListener(video, event, () => {
 				if (!this.exited() && this.isConnected)
 					this.rtc!.send(Msg.reinit(), 0);
@@ -210,7 +210,7 @@ export class Client {
 				return;
 
 			this._status('waiting for video...');
-			
+
 			// TODO decide if we want to continue
 
 			channel.onmessage = (event) => {
@@ -236,7 +236,9 @@ export class Client {
 			this.rtc!.send(Msg.config(cfg), 0);
 			this.rtc!.send(Msg.init(), 0);
 
-			this.pingInterval = setInterval(() => { this._ping(); }, 1000);
+			this.pingInterval = setInterval(() => {
+				this._ping();
+			}, 1000);
 			this._setReinitTimeout();
 			this.listeners.push(Util.addListener(this.video, 'timeupdate', () => {
 				this.onEvent({type: 'frame'});
@@ -289,10 +291,10 @@ export class Client {
 		}
 
 		const myAnswer = await this.rtc.createAnswer();
-		
+
 		if (isVideoInactive(myAnswer.sdp!))
 			throw new Error("Browser does not support necessary video codec");
-		
+
 		this._status('connecting...');
 
 		this.signal.connect(cfg, sessionId, myAnswer, (candidate: string, theirCreds: any) => {
@@ -312,6 +314,7 @@ export class Client {
 			}
 		}, this.stallTimeout);
 	}
+
 	async _ping() {
 		const channel = this.rtc!.channels[0];
 		const tag = Math.floor(Math.random() * 0x60000000);
@@ -334,6 +337,7 @@ export class Client {
 				channel.removeEventListener('message', responseListener);
 				resolve(end);
 			}
+
 			channel.addEventListener('message', responseListener);
 			setTimeout(() => {
 				channel.removeEventListener('message', responseListener);
@@ -346,7 +350,7 @@ export class Client {
 		this.rtc!.send(Msg.ping(tag), 0);
 		console.debug(`ping ${tag}`);
 		// wait for echo
-		try{
+		try {
 			var end = await roundtrip;
 		} catch (e) {
 			if (e === "timeout")
@@ -364,6 +368,7 @@ export class Client {
 	exited() {
 		return this.hasOwnProperty('exitCode');
 	}
+
 	_status(msg: string) {
 		this.onEvent({type: 'status', msg: {str: msg}})
 	}
