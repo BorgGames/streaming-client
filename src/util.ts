@@ -44,7 +44,8 @@ export function toggleFullscreen(element: Element) {
 
 	} else {
 		if (element.requestFullscreen)
-			element.requestFullscreen({ navigationUI: 'hide' });
+			element.requestFullscreen({ navigationUI: 'hide' })
+				.catch(reason => console.error('Failed to enter fullscreen:', reason));
 		else {
 			const wkElement = element as any;
 			if (wkElement.webkitRequestFullscreen) {
