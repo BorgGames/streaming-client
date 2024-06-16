@@ -275,6 +275,16 @@ export class Client {
 				break;
 			}
 		});
+		
+		this.rtc.rtc.addEventListener('iceconnectionstatechange', () => {
+			console.debug("ice connection state", this.rtc!.rtc.iceConnectionState);
+		});
+		this.rtc.rtc.addEventListener('connectionstatechange', () => {
+			console.debug("connection state", this.rtc!.rtc.connectionState);
+		});
+		this.rtc.rtc.addEventListener('signalingstatechange', () => {
+			console.debug("signaling state", this.rtc!.rtc.signalingState);
+		});
 
 		this.rtc.rtc.ontrack = (event) => {
 			console.log("ontrack", event.streams[0]);
