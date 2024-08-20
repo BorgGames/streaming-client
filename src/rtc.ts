@@ -144,6 +144,8 @@ export class RTC {
 		}
 		await this.started;
 
+		console.debug('adding remote candidate', candidate);
+
 		const remoteCandidate = JSON.parse(candidate);
 		await this.rtc.addIceCandidate(remoteCandidate);
 	}
