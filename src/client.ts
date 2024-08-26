@@ -197,7 +197,7 @@ export class Client {
 		};
 
 		const onControlOpen = async () => {
-			this._status('connected\n\nwaiting for reply...');
+			this._status('connected\n\nour server is downloading your app...');
 			const channel = this.rtc!.channels[0];
 			try {
 				var networkStatistics = await this.channelOpen('control', channel);
