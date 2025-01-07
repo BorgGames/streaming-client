@@ -42,6 +42,8 @@ function getAxisValue(value: number) {
 export class Input {
 	element: HTMLVideoElement;
 	m!: IScreenScaling;
+	lastTouchX: null | number;
+	lastTouchY: null | number;
 	gamepad: null | GamepadManager;
 	mouseRelative: boolean;
 	private blockNextEsc: boolean;
@@ -54,6 +56,8 @@ export class Input {
 	private cursorId: number;
 
 	constructor(element: HTMLVideoElement, send: (data: ArrayBuffer) => void) {
+		this.lastTouchX = null;
+		this.lastTouchY = null;
 		this.send = send;
 		this.element = element;
 		this.gamepad = null;
@@ -94,6 +98,32 @@ export class Input {
 		this.send(Msg.motion(relative, x, y));
 	}
 
+	_touchMovement(event: TouchEvent) {
+		if (!this.m) return;
+		
+		let touch = event.changedTouches[0];
+
+		let relative = false;
+		let x = 0;
+		let y = 0;
+
+		if (document.pointerLockElement) {
+			relative = true;
+			x = touch.clientX - this.lastTouchX!;
+			y = touch.clientY - this.lastTouchY!;
+			if (x === 0 && y === 0)
+				return;
+			this.lastTouchX = touch.clientX;
+			this.lastTouchY = touch.clientY;
+		} else {
+			// edit: use offset coordinates not client coordinates
+			x = clientToServerX(touch.clientX, this.m);
+			y = clientToServerY(touch.clientY, this.m);
+		}
+
+		this.send(Msg.motion(relative, x, y));
+	}
+
 	_mouseButton(event: MouseEvent) {
 		const down = event.type === 'mousedown';
 		let button = 0;
@@ -127,6 +157,13 @@ export class Input {
 		const y = clientToServerY(touch.clientY, this.m);
 		this.send(Msg.motion(false, x, y));
 		this.send(Msg.mouse(1, down));
+		if (down) {
+			this.lastTouchX = touch.clientX;
+			this.lastTouchY = touch.clientY;
+		} else {
+			this.lastTouchX = null;
+			this.lastTouchY = null;
+		}
 	}
 
 	_key(event: KeyboardEvent) {
@@ -281,6 +318,7 @@ export class Input {
 		this.listeners.push(Util.addListener(this.element, 'mousemove', this._mouseMovement, this));
 		this.listeners.push(Util.addListener(this.element, 'mousedown', this._mouseButton, this));
 		this.listeners.push(Util.addListener(this.element, 'mouseup', this._mouseButton, this));
+		this.listeners.push(Util.addListener(this.element, 'touchmove', this._touchMovement, this));
 		this.listeners.push(Util.addListener(this.element, 'touchstart', this._touch, this));
 		this.listeners.push(Util.addListener(this.element, 'touchend', this._touch, this));
 		// edit: use standard event although there is no difference
